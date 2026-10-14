@@ -1,0 +1,1042 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Smart Bell System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a dark clock-and-next-bell board runs across the top; setup, manual play and the sound library stack in a left column while the bell list fills the right. */
+:root{
+  --bg:#edf0f3; --surface:#ffffff; --surface-2:#f4f6f8; --ink:#14212b; --muted:#566673; --line:#d2d9df;
+  --accent:#a65f00; --accent-soft:#fbecd3; --good:#1f7a4f; --danger:#b3261e;
+  --primary:#14212b; --primary-ink:#f4f7f9; --focus:#0b63ce;
+  color-scheme:light;
+  --board-bg:#fdf3df; --board-ink:#14212b; --board-muted:#5b6a75; --board-accent:#a65f00; --board-line:#e2d1ae; --board-good:#1f7a4f; --board-focus:#0b63ce;
+  --font-display:'Barlow Condensed','Arial Narrow',Arial,sans-serif;
+  --font-body:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --font-data:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.5}
+h1,h2{font-family:var(--font-display);margin:0;text-wrap:balance}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.board :focus-visible{outline-color:var(--board-focus)}
+
+.app{max-width:1240px;margin:0 auto;padding-inline:16px;padding-block:20px 48px;display:flex;flex-direction:column;gap:16px}
+
+/* Board */
+.board{background:var(--board-bg);color:var(--board-ink);border-radius:3px;padding:20px clamp(16px,3vw,28px) 22px;display:flex;flex-direction:column;gap:20px}
+.board-top{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+.brand{display:flex;flex-direction:column;gap:2px;min-width:0}
+.school{font-family:var(--font-display);font-weight:700;font-size:clamp(1.25rem,3.4vw,1.9rem);letter-spacing:.04em;line-height:1.15;overflow-wrap:anywhere}
+.board h1{font-size:1rem!important;color:var(--board-muted);}
+.board h1x{font-size:clamp(1.5rem,3.2vw,2rem);font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.chip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--board-line);padding:5px 11px;border-radius:2px;font-family:var(--font-display);letter-spacing:.09em;text-transform:uppercase;font-weight:600;font-size:.95rem}
+.chip i{width:9px;height:9px;border-radius:50%;background:var(--board-muted)}
+.chip.on i{background:var(--board-good)}
+.board-main{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,19rem),1fr));gap:22px 32px}
+.board-main>div{min-width:0}
+.lbl{font-family:var(--font-display);text-transform:uppercase;letter-spacing:.14em;font-size:.9rem;color:var(--board-muted);font-weight:600}
+.clock{font-family:var(--font-data);font-size:clamp(2.3rem,9vw,4.3rem);font-weight:500;line-height:1.1;font-variant-numeric:tabular-nums;white-space:nowrap}
+.clock small{font-size:.32em;margin-left:.45em;color:var(--board-muted);letter-spacing:.05em}
+.date{color:var(--board-muted);margin-top:4px}
+.next-time{font-family:var(--font-display);font-weight:700;font-size:clamp(2.2rem,7vw,3.6rem);line-height:1.1;color:var(--board-accent)}
+.next-label{font-size:1.15rem;margin-top:2px;overflow-wrap:anywhere}
+.count{font-family:var(--font-data);color:var(--board-muted);margin-top:4px;font-variant-numeric:tabular-nums}
+.board-foot{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;border-top:1px solid var(--board-line);padding-top:18px}
+.notes{flex:1 1 18rem;min-width:0;display:flex;flex-direction:column;gap:2px}
+.note{margin:0;color:var(--board-muted);font-size:.9rem}
+.arm{font-family:var(--font-display);font-weight:700;font-size:1.25rem;letter-spacing:.07em;text-transform:uppercase;padding:.7rem 1.4rem;border-radius:3px;border:1px solid var(--board-accent);background:var(--board-accent);color:#ffffff;cursor:pointer}
+.arm:hover{filter:brightness(1.07)}
+.arm.running{background:transparent;color:var(--board-ink);border-color:var(--board-muted)}
+.playing{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;border:1px solid var(--board-accent);border-radius:3px;padding:10px 12px}
+.playing .pulse{width:10px;height:10px;border-radius:50%;background:var(--board-accent);animation:pulse 1s ease-in-out infinite}
+.playing span.txt{flex:1 1 10rem;min-width:0;overflow-wrap:anywhere}
+.playing .btn{border-color:var(--board-muted);color:var(--board-ink);background:transparent}
+@keyframes pulse{50%{opacity:.25}}
+
+.msg{margin:0;padding:10px 14px;background:var(--surface);border:1px solid var(--line);border-radius:3px}
+
+/* Layout grid */
+.grid{display:grid;gap:16px;grid-template-columns:minmax(0,1fr);grid-template-areas:"setup" "bells" "manual" "library";align-items:start}
+.setup{grid-area:setup}.bellcard{grid-area:bells}.manual{grid-area:manual}.library{grid-area:library}
+@media (min-width:980px){
+  .grid{grid-template-columns:minmax(300px,380px) minmax(0,1fr);grid-template-areas:"setup bells" "manual bells" "library bells"}
+}
+
+/* Cards */
+.card{background:var(--surface);border:1px solid var(--line);border-top:3px solid var(--ink);border-radius:2px;padding:16px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.card h2{font-size:1.3rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.card-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 12px}
+.help{margin:0;color:var(--muted);font-size:.92rem}
+
+/* Forms */
+.fields{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(8.5rem,1fr))}
+.fld{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fld>span,legend{font-family:var(--font-display);text-transform:uppercase;letter-spacing:.09em;font-size:.88rem;font-weight:600;color:var(--muted)}
+input[type=text],input[type=number],input[type=time],select{width:100%;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:3px;padding:.45rem .6rem}
+input[type=number],input[type=time]{font-family:var(--font-data);font-size:.95rem;font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--accent)}
+input:disabled{opacity:.5}
+fieldset{border:0;margin:0;padding:0;min-width:0;display:flex;flex-direction:column;gap:6px}
+.chk{display:flex;align-items:center;gap:8px;cursor:pointer}
+.chk input{width:1.05rem;height:1.05rem;accent-color:var(--accent);margin:0}
+.days{display:flex;flex-wrap:wrap;gap:6px}
+.day{border:1px solid var(--line);background:var(--surface);border-radius:3px;padding:.3rem .7rem;font-family:var(--font-display);font-weight:600;letter-spacing:.05em;text-transform:uppercase;cursor:pointer}
+.day[aria-pressed="true"]{background:var(--primary);color:var(--primary-ink);border-color:var(--primary)}
+.summary{margin:0;padding:10px 12px;background:var(--surface-2);border-radius:3px;font-size:.92rem}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:3px;padding:.45rem .9rem;cursor:pointer;font-weight:500}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--primary);color:var(--primary-ink);border-color:var(--primary);font-weight:600}
+.btn.big{font-family:var(--font-display);font-size:1.2rem;letter-spacing:.07em;text-transform:uppercase;font-weight:700;padding:.65rem 1.3rem}
+.btn.danger{border-color:var(--danger);color:var(--danger)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.icon{display:inline-flex;align-items:center;justify-content:center;width:2.1rem;height:2.1rem;border:1px solid var(--line);background:var(--surface);border-radius:3px;cursor:pointer;padding:0}
+.icon:hover{border-color:var(--muted)}
+.btn-row{display:flex;flex-wrap:wrap;gap:8px}
+
+/* Bell list */
+.toolbar{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center}
+.toolbar .grow{flex:1 1 12rem;min-width:0;display:flex;gap:8px;align-items:center}
+.toolbar select{flex:1 1 8rem}
+.rows{list-style:none;margin:0 -16px;padding:0;border-top:1px solid var(--line)}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:10px 16px;border-bottom:1px solid var(--line)}
+.row .f-time{flex:0 0 8.8rem;width:8.8rem}
+.row .f-label{flex:1 1 11rem}
+.row .f-sound{flex:1 1 11rem}
+.row .acts{display:flex;align-items:center;gap:8px;margin-left:auto}
+.row.past{opacity:.55}
+.row.off{opacity:.5}
+.row.off .f-label{text-decoration:line-through}
+.row.next{background:var(--accent-soft);box-shadow:inset 4px 0 0 var(--accent);opacity:1}
+.row.ringing{background:var(--accent-soft);box-shadow:inset 4px 0 0 var(--accent);opacity:1;animation:ringrow 1s steps(2) infinite}
+@keyframes ringrow{50%{background:var(--surface)}}
+.empty{padding:20px 16px;color:var(--muted);margin:0}
+
+/* Library */
+.libs{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.lib{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--line)}
+.lib .nm{flex:1 1 auto;min-width:0;display:flex;flex-direction:column}
+.lib .nm span{overflow-wrap:anywhere}
+.lib .nm small{color:var(--muted)}
+.drop{border:1px dashed var(--muted);border-radius:3px;padding:12px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.drop.over{background:var(--accent-soft);border-color:var(--accent)}
+.drop p{margin:0;color:var(--muted);flex:1 1 10rem;min-width:0}
+.foot{margin:0;color:var(--muted);font-size:.88rem}
+
+
+.credit{text-align:center;color:var(--muted);font-family:var(--font-display);font-weight:600;letter-spacing:.12em;text-transform:uppercase;font-size:.95rem;padding-top:8px;border-top:1px solid var(--line)}
+.tabs{display:flex;flex-wrap:wrap;gap:8px}
+.tab{flex:1 1 8rem;font-family:var(--font-display);font-weight:700;font-size:1.3rem;letter-spacing:.06em;text-transform:uppercase;padding:.7rem 1rem;border:1px solid var(--line);background:var(--surface);border-radius:3px;cursor:pointer}
+.tab[aria-selected="true"]{background:var(--primary);color:var(--primary-ink);border-color:var(--primary)}
+.panels{display:flex;flex-direction:column;gap:16px}
+.panel{display:flex;flex-direction:column;gap:16px;min-width:0}
+.panel[hidden]{display:none}
+.more{border:1px solid var(--line);border-radius:3px;background:var(--surface-2)}
+.more summary{cursor:pointer;padding:.65rem .85rem;font-family:var(--font-display);font-weight:600;letter-spacing:.07em;text-transform:uppercase}
+.more-body{padding:0 .85rem .9rem;display:flex;flex-direction:column;gap:14px}
+.note.ok{color:var(--board-good)}
+.note.warn{color:var(--board-accent)}
+@media (prefers-reduced-motion: reduce){
+  .playing .pulse,.row.ringing{animation:none}
+}
+</style>
+
+<div class="app">
+  <section class="board" aria-label="Clock and next bell">
+    <div class="board-top">
+      <div class="brand"><div class="school">Kuli/ Sri Dhammandha Maha Vidyalaya, Udubaddawa</div><h1>Smart Bell System</h1></div>
+      <span class="chip" id="chip"><i></i><span id="chipText">Bells are OFF</span></span>
+    </div>
+    <div class="board-main">
+      <div>
+        <div class="lbl">Now</div>
+        <div class="clock"><span id="clockMain">--:--:--</span><small id="ampm"></small></div>
+        <div class="date" id="date"></div>
+      </div>
+      <div>
+        <div class="lbl">Next bell</div>
+        <div class="next-time" id="nextTime">&mdash;</div>
+        <div class="next-label" id="nextLabel"></div>
+        <div class="count" id="count"></div>
+      </div>
+    </div>
+    <div class="board-foot">
+      <button type="button" class="arm" id="armBtn">Turn bells on</button>
+      <div class="notes">
+        <p class="note" id="armNote"></p>
+        <p class="note" id="awakeNote"></p>
+        <p class="note" id="lastRang"></p>
+      </div>
+    </div>
+    <div class="playing" id="nowPlaying" hidden>
+      <span class="pulse"></span>
+      <span class="txt" id="npText"></span>
+      <button type="button" class="btn js-stop">Stop sound</button>
+    </div>
+  </section>
+
+  <p class="msg" id="msg" role="status" hidden></p>
+
+  <div class="tabs" role="tablist" aria-label="Sections">
+    <button type="button" role="tab" class="tab" id="tab-play" data-tab="play" aria-selected="true" aria-controls="panel-play">Play now</button>
+    <button type="button" role="tab" class="tab" id="tab-times" data-tab="times" aria-selected="false" aria-controls="panel-times">Bell times</button>
+    <button type="button" role="tab" class="tab" id="tab-music" data-tab="music" aria-selected="false" aria-controls="panel-music">Music</button>
+  </div>
+
+  <div class="panels">
+    <section class="panel" id="panel-play" role="tabpanel" aria-labelledby="tab-play">
+      <div class="card manual">
+        <h2>Play a sound now</h2>
+        <p class="help">Ring a bell or start music by hand, any time.</p>
+        <label class="fld"><span>Choose a sound</span><select id="manualSound"></select></label>
+        <label class="chk"><input type="checkbox" id="manualLimit"> <span id="manualLimitText">Stop automatically after the ring length</span></label>
+        <div class="btn-row">
+          <button type="button" class="btn primary big" id="manualPlay">Play now</button>
+          <button type="button" class="btn big js-stop" id="manualStop" disabled>Stop</button>
+        </div>
+        <label class="fld"><span>Volume <output id="volVal"></output></span><input type="range" id="volume" min="0" max="100" step="1"></label>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-times" role="tabpanel" aria-labelledby="tab-times" hidden>
+      <div class="card setup">
+        <h2>Make the day's bell times</h2>
+        <p class="help">Type when the day starts and how long each period and break is. Press the button and every bell time is made for you.</p>
+        <form id="setupForm" style="display:flex;flex-direction:column;gap:14px" novalidate>
+          <div class="fields">
+            <label class="fld"><span>Day starts at</span><input type="time" id="startTime" required></label>
+            <label class="fld"><span>Each period (minutes)</span><input type="number" id="periodMin" min="1" max="240" inputmode="numeric"></label>
+            <label class="fld"><span>Break between periods (minutes)</span><input type="number" id="gapMin" min="0" max="120" inputmode="numeric"></label>
+            <label class="fld"><span>Number of periods</span><input type="number" id="periods" min="1" max="20" inputmode="numeric"></label>
+          </div>
+          <p class="summary" id="summary"></p>
+          <details class="more">
+            <summary>More options</summary>
+            <div class="more-body">
+              <div class="fields">
+                <label class="fld"><span>Long break</span><select id="longAfter"></select></label>
+                <label class="fld"><span>Long break length (minutes)</span><input type="number" id="longMin" min="1" max="120" inputmode="numeric"></label>
+                <label class="fld"><span>Sound for new bells</span><select id="defaultSound"></select></label>
+                <label class="fld"><span>Ring length (seconds)</span><input type="number" id="ringSec" min="1" max="120" inputmode="numeric"></label>
+              </div>
+              <label class="chk"><input type="checkbox" id="ringEnd"> Also ring when each period ends</label>
+              <fieldset>
+                <legend>Bells ring on these days</legend>
+                <div class="days" id="days"></div>
+              </fieldset>
+            </div>
+          </details>
+          <div class="btn-row"><button type="submit" class="btn primary big">Make bell times</button></div>
+          <p class="help">This replaces the list below. The sound chosen for each bell is kept.</p>
+        </form>
+      </div>
+
+      <div class="card bellcard">
+        <div class="card-head">
+          <h2>Bell list</h2>
+          <span class="help" id="bellCount"></span>
+        </div>
+        <p class="help">Change a time, a name or a sound directly in the list. Untick On to skip a bell.</p>
+        <div class="toolbar">
+          <div class="grow">
+            <select id="allSound" aria-label="Sound to use for every bell"></select>
+            <button type="button" class="btn" id="allApply">Use for all bells</button>
+          </div>
+          <button type="button" class="btn primary" id="addBell">Add a bell</button>
+        </div>
+        <ul class="rows" id="bellList"></ul>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-music" role="tabpanel" aria-labelledby="tab-music" hidden>
+      <div class="card library" id="libraryCard">
+        <h2>Music</h2>
+        <div class="drop" id="drop">
+          <p>Add your own music. mp3, wav, m4a or ogg files up to 40 MB each.</p>
+          <label class="btn primary" for="fileInput">Add music files</label>
+          <input type="file" id="fileInput" accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac,.flac,.opus" multiple hidden>
+        </div>
+        <ul class="libs" id="libList"></ul>
+        <p class="foot">Settings and music are saved in this browser only. Always open the bell system in the same browser on the school computer.</p>
+      </div>
+    </section>
+  </div>
+  <footer class="credit">Created by A. Thivaharan &middot; Developed with the assistance of AI</footer>
+</div>
+
+<script>
+(function(){
+'use strict';
+var $=function(id){return document.getElementById(id);};
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function two(n){return String(n).padStart(2,'0');}
+function uid(){return Math.random().toString(36).slice(2,9);}
+
+/*BUILD_START*/
+function toMin(s){
+  var m=/^(\d{1,2}):(\d{2})$/.exec(s||'');
+  if(!m) return null;
+  var h=+m[1], mi=+m[2];
+  if(h>23||mi>59) return null;
+  return h*60+mi;
+}
+function toStr(min){
+  var h=Math.floor(min/60)%24, m=min%60;
+  return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+}
+function buildBells(cfg){
+  var out=[];
+  var t=toMin(cfg.start);
+  if(t===null) return out;
+  var N=cfg.periods;
+  for(var p=1;p<=N;p++){
+    if(t>=1440) break;
+    out.push({time:toStr(t),label:'Period '+p+' begins'});
+    t+=cfg.periodMin;
+    if(t>=1440) break;
+    var last=(p===N);
+    var isLong=(p===cfg.longAfter);
+    var gap=last?0:(isLong?cfg.longMin:cfg.gapMin);
+    if(last){
+      out.push({time:toStr(t),label:'School day ends'});
+    }else if(gap>0&&(cfg.ringEnd||isLong)){
+      out.push({time:toStr(t),label:isLong?('Period '+p+' ends, long break'):('Period '+p+' ends')});
+    }
+    t+=gap;
+  }
+  return out;
+}
+/*BUILD_END*/
+
+var BUILTIN=[
+  {id:'b:classic',name:'Classic school bell'},
+  {id:'b:dingdong',name:'Ding-dong chime'},
+  {id:'b:rising',name:'Rising chime'},
+  {id:'b:digital',name:'Digital beeps'}
+];
+var DAYS=[[1,'Mon'],[2,'Tue'],[3,'Wed'],[4,'Thu'],[5,'Fri'],[6,'Sat'],[0,'Sun']];
+var DAYNAMES=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+var DEFAULTS={start:'07:30',periodMin:40,gapMin:5,periods:8,longAfter:0,longMin:20,ringEnd:true,defaultSound:'b:classic',ringSec:8,volume:0.8,days:[1,2,3,4,5],manualSound:'b:classic',manualLimit:false};
+var KEY='smartbell.v1';
+var GRACE=90;
+var ICON_PLAY='<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>';
+var ICON_TRASH='<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5M7 7v4M9 7v4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+var settings=Object.assign({},DEFAULTS,{days:DEFAULTS.days.slice()});
+var bells=[];
+var uploads=[];
+var armed=false;
+var current=null;
+var ringingId=null;
+var ctx=null, master=null, wake=null;
+var fired=new Set();
+var lastKey='';
+var pendingDel=null;
+var msgTimer=null;
+var lastClock='';
+
+/* ---------- Storage ---------- */
+function persist(){
+  try{localStorage.setItem(KEY,JSON.stringify({settings:settings,bells:bells}));}catch(e){}
+}
+function sortBells(){
+  bells.sort(function(a,b){return (toMin(a.time)-toMin(b.time))||a.label.localeCompare(b.label);});
+}
+function makeBells(prev){
+  var map=new Map((prev||[]).map(function(b){return [b.label,b];}));
+  return buildBells(settings).map(function(b){
+    var p=map.get(b.label);
+    return {id:uid(),time:b.time,label:b.label,sound:p?p.sound:settings.defaultSound,on:p?p.on:true};
+  });
+}
+function load(){
+  var saved=null;
+  try{saved=JSON.parse(localStorage.getItem(KEY)||'null');}catch(e){}
+  if(saved&&saved.settings){
+    settings=Object.assign({},DEFAULTS,saved.settings);
+    settings.days=Array.isArray(saved.settings.days)?saved.settings.days.slice():DEFAULTS.days.slice();
+  }
+  if(saved&&Array.isArray(saved.bells)&&saved.bells.length){
+    bells=saved.bells.filter(function(b){return b&&toMin(b.time)!==null;}).map(function(b){
+      return {id:b.id||uid(),time:b.time,label:String(b.label||'Bell'),sound:b.sound||settings.defaultSound,on:b.on!==false};
+    });
+  }
+  if(!bells.length) bells=makeBells();
+  sortBells();
+}
+
+var dbPromise=null;
+function idb(){
+  if(dbPromise) return dbPromise;
+  dbPromise=new Promise(function(res,rej){
+    try{
+      var r=indexedDB.open('smartbell',1);
+      r.onupgradeneeded=function(){r.result.createObjectStore('sounds',{keyPath:'id'});};
+      r.onsuccess=function(){res(r.result);};
+      r.onerror=function(){rej(r.error);};
+    }catch(e){rej(e);}
+  });
+  return dbPromise;
+}
+function idbAll(){
+  return idb().then(function(db){return new Promise(function(res,rej){
+    var q=db.transaction('sounds').objectStore('sounds').getAll();
+    q.onsuccess=function(){res(q.result);};
+    q.onerror=function(){rej(q.error);};
+  });});
+}
+function idbPut(rec){
+  return idb().then(function(db){return new Promise(function(res,rej){
+    var tx=db.transaction('sounds','readwrite');
+    tx.objectStore('sounds').put(rec);
+    tx.oncomplete=function(){res();};
+    tx.onerror=function(){rej(tx.error);};
+  });});
+}
+function idbDel(id){
+  return idb().then(function(db){return new Promise(function(res,rej){
+    var tx=db.transaction('sounds','readwrite');
+    tx.objectStore('sounds').delete(id);
+    tx.oncomplete=function(){res();};
+    tx.onerror=function(){rej(tx.error);};
+  });});
+}
+
+/* ---------- Formatting ---------- */
+function fmt12(min){
+  var h=Math.floor(min/60)%24, m=min%60;
+  return ((h+11)%12+1)+':'+two(m)+' '+(h<12?'AM':'PM');
+}
+function fmtStr(s){var m=toMin(s);return m===null?'':fmt12(m);}
+function countdown(sec){
+  var h=Math.floor(sec/3600), m=Math.floor(sec%3600/60), s=sec%60;
+  return two(h)+':'+two(m)+':'+two(s);
+}
+function fmtSize(n){return n>=1048576?(n/1048576).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB';}
+function dateKey(d){return d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate();}
+function secsOf(d){return d.getHours()*3600+d.getMinutes()*60+d.getSeconds();}
+function say(text){
+  var el=$('msg');
+  el.textContent=text;
+  el.hidden=false;
+  clearTimeout(msgTimer);
+  msgTimer=setTimeout(function(){el.hidden=true;},7000);
+}
+
+/* ---------- Sounds ---------- */
+function soundName(id){
+  var b=BUILTIN.find(function(s){return s.id===id;});
+  if(b) return b.name;
+  var u=uploads.find(function(x){return 'u:'+x.id===id;});
+  return u?u.name:'Missing sound';
+}
+function opt(v,t,sel){return '<option value="'+esc(v)+'"'+(v===sel?' selected':'')+'>'+esc(t)+'</option>';}
+function soundOptions(sel){
+  var h='<optgroup label="Built-in">'+BUILTIN.map(function(s){return opt(s.id,s.name,sel);}).join('')+'</optgroup>';
+  if(uploads.length) h+='<optgroup label="Your music">'+uploads.map(function(u){return opt('u:'+u.id,u.name,sel);}).join('')+'</optgroup>';
+  if(sel&&sel.indexOf('u:')===0&&!uploads.some(function(u){return 'u:'+u.id===sel;})){
+    h+='<optgroup label="Not found">'+opt(sel,'Missing file, add it again',sel)+'</optgroup>';
+  }
+  return h;
+}
+function fillSoundSelects(){
+  $('defaultSound').innerHTML=soundOptions(settings.defaultSound);
+  $('manualSound').innerHTML=soundOptions(settings.manualSound);
+  var all=$('allSound'), keep=all.value||settings.defaultSound;
+  all.innerHTML=soundOptions(keep);
+}
+
+function ensureCtx(){
+  if(ctx) return ctx;
+  var AC=window.AudioContext||window.webkitAudioContext;
+  if(!AC) return null;
+  ctx=new AC();
+  master=ctx.createGain();
+  master.gain.value=settings.volume;
+  master.connect(ctx.destination);
+  return ctx;
+}
+function bellTone(bus,t0,f,amp,decay,ratios){
+  (ratios||[1,2.76,5.4,8.93]).forEach(function(r,i){
+    var o=ctx.createOscillator(), g=ctx.createGain();
+    o.type='sine';
+    o.frequency.value=f*r;
+    var a=amp/Math.pow(1.9,i);
+    g.gain.setValueAtTime(0.0001,t0);
+    g.gain.exponentialRampToValueAtTime(a,t0+0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001,t0+decay/(1+i*0.6));
+    o.connect(g); g.connect(bus);
+    o.start(t0); o.stop(t0+decay+0.05);
+  });
+}
+function beep(bus,t,d){
+  var o=ctx.createOscillator(), g=ctx.createGain();
+  o.type='square'; o.frequency.value=1000;
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.linearRampToValueAtTime(0.12,t+0.01);
+  g.gain.setValueAtTime(0.12,t+d-0.02);
+  g.gain.linearRampToValueAtTime(0.0001,t+d);
+  o.connect(g); g.connect(bus);
+  o.start(t); o.stop(t+d+0.02);
+}
+function synth(id,dur){
+  var bus=ctx.createGain();
+  bus.connect(master);
+  var t0=ctx.currentTime+0.03, len=0, t, k;
+  if(id==='b:classic'){
+    for(t=0;t<dur;t+=1.3){
+      for(k=0;k<12&&t+k*0.08<dur;k++) bellTone(bus,t0+t+k*0.08,k%2?1180:1040,0.22,0.22,[1,2.4,4.1]);
+    }
+    len=dur+0.5;
+  }else if(id==='b:dingdong'){
+    bellTone(bus,t0,659.25,0.45,1.8);
+    bellTone(bus,t0+0.8,523.25,0.45,2.2);
+    len=3;
+  }else if(id==='b:rising'){
+    [523.25,659.25,783.99,1046.5].forEach(function(f,i){bellTone(bus,t0+i*0.38,f,0.4,1.5);});
+    len=3;
+  }else{
+    t=0;
+    while(t<dur){
+      for(k=0;k<3&&t<dur;k++){beep(bus,t0+t,0.16);t+=0.26;}
+      t+=0.5;
+    }
+    len=t;
+  }
+  return {bus:bus,len:len};
+}
+
+function stopAll(){
+  if(!current) return;
+  var c=current;
+  current=null;
+  if(c.kind==='synth'){
+    try{
+      c.bus.gain.cancelScheduledValues(ctx.currentTime);
+      c.bus.gain.setTargetAtTime(0,ctx.currentTime,0.05);
+      setTimeout(function(){try{c.bus.disconnect();}catch(e){}},500);
+    }catch(e){}
+  }else{
+    try{c.audio.onended=null;c.audio.onerror=null;c.audio.pause();c.audio.removeAttribute('src');c.audio.load();}catch(e){}
+  }
+  ringingId=null;
+  renderPlaying();
+  markRows();
+}
+function clearIfCurrent(a){
+  if(current&&current.audio===a){current=null;ringingId=null;renderPlaying();markRows();}
+}
+function play(soundId,opts){
+  opts=opts||{};
+  stopAll();
+  var label=soundName(soundId);
+  var limit=opts.limit||0;
+  var now=Date.now();
+  if(soundId.indexOf('b:')===0){
+    var c=ensureCtx();
+    if(!c){say('This browser cannot play sounds.');return false;}
+    if(c.state==='suspended') c.resume();
+    var s=synth(soundId,limit||10);
+    current={kind:'synth',bus:s.bus,label:label,endsAt:now+s.len*1000+200};
+  }else{
+    var up=uploads.find(function(u){return 'u:'+u.id===soundId;});
+    if(!up){
+      say('The sound for this bell is missing, so the classic bell played instead. Add the file again in the sound library.');
+      return play('b:classic',opts);
+    }
+    var a=new Audio(up.url);
+    a.volume=settings.volume;
+    current={kind:'file',audio:a,label:label,endsAt:limit?now+limit*1000:null,fade:limit?1500:0};
+    a.onended=function(){clearIfCurrent(a);};
+    a.onerror=function(){say('Could not play '+label+'. The file may be damaged or in a format this browser does not support.');clearIfCurrent(a);};
+    var pr=a.play();
+    if(pr&&pr.catch) pr.catch(function(){
+      say('Could not play '+label+'. Click once anywhere on the page, then try again.');
+      clearIfCurrent(a);
+    });
+  }
+  ringingId=opts.bellId||null;
+  renderPlaying();
+  markRows();
+  return true;
+}
+function updatePlayback(){
+  if(!current||!current.endsAt) return;
+  var t=Date.now();
+  if(t>=current.endsAt){stopAll();return;}
+  if(current.kind==='file'&&current.fade){
+    var left=current.endsAt-t;
+    if(left<current.fade) current.audio.volume=Math.max(0,settings.volume*left/current.fade);
+  }
+}
+
+/* ---------- Scheduler ---------- */
+function markPastFired(){
+  var now=new Date(), secs=secsOf(now), dk=dateKey(now);
+  bells.forEach(function(b){
+    if(secs>=toMin(b.time)*60) fired.add(dk+'|'+b.id+'|'+b.time);
+  });
+}
+function checkBells(now){
+  if(settings.days.indexOf(now.getDay())<0) return;
+  var secs=secsOf(now), dk=dateKey(now);
+  for(var i=0;i<bells.length;i++){
+    var b=bells[i];
+    if(!b.on) continue;
+    var bs=toMin(b.time)*60;
+    var k=dk+'|'+b.id+'|'+b.time;
+    if(secs>=bs&&secs<bs+GRACE&&!fired.has(k)){
+      fired.add(k);
+      ringBell(b,now);
+    }
+  }
+}
+function ringBell(b,now){
+  play(b.sound,{limit:settings.ringSec,bellId:b.id});
+  $('lastRang').textContent='Last bell: '+b.label+' at '+fmt12(now.getHours()*60+now.getMinutes()).replace(/ (AM|PM)/,':'+two(now.getSeconds())+' $1');
+}
+function nextBell(now){
+  var secs=secsOf(now), today=now.getDay();
+  var list=bells.filter(function(b){return b.on;}).map(function(b){return {b:b,s:toMin(b.time)*60};}).sort(function(a,b){return a.s-b.s;});
+  if(!list.length) return null;
+  for(var d=0;d<8;d++){
+    var day=(today+d)%7;
+    if(settings.days.indexOf(day)<0) continue;
+    for(var i=0;i<list.length;i++){
+      if(d>0||list[i].s>secs) return {bell:list[i].b,inSec:d*86400+list[i].s-secs,dayOffset:d};
+    }
+  }
+  return null;
+}
+
+/* ---------- Arm / wake lock ---------- */
+function requestWake(){
+  try{
+    if(navigator.wakeLock&&armed&&document.visibilityState==='visible'&&!wake){
+      navigator.wakeLock.request('screen').then(function(l){
+        wake=l;
+        l.addEventListener('release',function(){wake=null;renderArm();});
+        renderArm();
+      }).catch(function(){});
+    }
+  }catch(e){}
+}
+function releaseWake(){
+  try{if(wake){wake.release();}}catch(e){}
+  wake=null;
+}
+function arm(){
+  var c=ensureCtx();
+  if(c){
+    try{
+      if(c.state==='suspended') c.resume();
+      var buf=c.createBuffer(1,1,22050), src=c.createBufferSource();
+      src.buffer=buf; src.connect(c.destination); src.start();
+    }catch(e){}
+  }
+  armed=true;
+  markPastFired();
+  requestWake();
+  renderArm();
+  markRows();
+}
+function disarm(){
+  armed=false;
+  releaseWake();
+  renderArm();
+}
+
+/* ---------- Rendering ---------- */
+function renderArm(){
+  var btn=$('armBtn');
+  btn.textContent=armed?'Turn bells off':'Turn bells on';
+  btn.classList.toggle('running',armed);
+  $('chip').classList.toggle('on',armed);
+  $('chipText').textContent=armed?'Bells are ON':'Bells are OFF';
+  var note=$('armNote'), warn=$('awakeNote');
+  if(!armed){
+    note.textContent='Bells will not ring until you press Turn bells on. Keep this page open.';
+    warn.textContent='';
+  }else{
+    note.textContent='Bells will ring on school days at the times in the Bell times tab. Keep this page open.';
+    warn.textContent=wake?'Screen is being kept awake.':'Could not keep the screen awake automatically. In Windows go to Settings, System, Power, and set Sleep to Never.';
+    warn.className='note'+(wake?' ok':' warn');
+  }
+}
+function renderPlaying(){
+  var np=$('nowPlaying');
+  if(current){np.hidden=false;$('npText').textContent='Playing: '+current.label;}
+  else np.hidden=true;
+  $('manualStop').disabled=!current;
+}
+function renderBoard(now){
+  var h=now.getHours(), m=now.getMinutes(), s=now.getSeconds();
+  var clock=(((h+11)%12)+1)+':'+two(m)+':'+two(s);
+  if(clock!==lastClock){
+    lastClock=clock;
+    $('clockMain').textContent=clock;
+    $('ampm').textContent=h<12?'AM':'PM';
+    var active=settings.days.indexOf(now.getDay())>=0;
+    $('date').textContent=now.toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long',year:'numeric'})+(active?'':' · No bells today');
+    var nb=nextBell(now);
+    if(nb){
+      $('nextTime').textContent=fmtStr(nb.bell.time);
+      $('nextLabel').textContent=nb.bell.label+(nb.dayOffset?' · '+(nb.dayOffset===1?'tomorrow':DAYNAMES[(now.getDay()+nb.dayOffset)%7]):'');
+      $('count').textContent='in '+countdown(nb.inSec);
+    }else{
+      $('nextTime').textContent='—';
+      $('nextLabel').textContent='No bells are switched on';
+      $('count').textContent='';
+    }
+    var key=h+':'+m+'|'+(nb?nb.bell.id:'');
+    if(key!==lastKey){lastKey=key;markRows();}
+  }
+}
+function markRows(){
+  var now=new Date(), secs=secsOf(now), active=settings.days.indexOf(now.getDay())>=0, nb=nextBell(now);
+  var rows=document.querySelectorAll('#bellList .row');
+  for(var i=0;i<rows.length;i++){
+    var r=rows[i];
+    var b=bells.find(function(x){return x.id===r.dataset.id;});
+    if(!b) continue;
+    r.classList.toggle('past',active&&secs>=toMin(b.time)*60);
+    r.classList.toggle('off',!b.on);
+    r.classList.toggle('next',!!nb&&nb.bell.id===b.id);
+    r.classList.toggle('ringing',ringingId===b.id);
+  }
+}
+function renderBells(){
+  $('bellCount').textContent=bells.length+(bells.length===1?' bell':' bells');
+  var list=$('bellList');
+  if(!bells.length){
+    list.innerHTML='<li class="empty">No bells yet. Apply a schedule or add a bell.</li>';
+    return;
+  }
+  list.innerHTML=bells.map(function(b){
+    return '<li class="row" data-id="'+b.id+'">'+
+      '<input class="f-time" type="time" data-f="time" value="'+esc(b.time)+'" aria-label="Bell time" required>'+
+      '<input class="f-label" type="text" data-f="label" value="'+esc(b.label)+'" maxlength="60" aria-label="Bell name">'+
+      '<select class="f-sound" data-f="sound" aria-label="Sound for '+esc(b.label)+'">'+soundOptions(b.sound)+'</select>'+
+      '<div class="acts">'+
+        '<button type="button" class="icon" data-act="play" aria-label="Play this bell">'+ICON_PLAY+'</button>'+
+        '<label class="chk"><input type="checkbox" data-f="on"'+(b.on?' checked':'')+'> On</label>'+
+        '<button type="button" class="icon" data-act="del" aria-label="Delete this bell">'+ICON_TRASH+'</button>'+
+      '</div></li>';
+  }).join('');
+  markRows();
+}
+function renderLibrary(){
+  var rows=BUILTIN.map(function(s){return {id:s.id,name:s.name,meta:'Built-in',builtin:true};})
+    .concat(uploads.map(function(u){return {id:'u:'+u.id,name:u.name,meta:fmtSize(u.size),builtin:false};}));
+  $('libList').innerHTML=rows.map(function(r){
+    var used=bells.filter(function(b){return b.sound===r.id;}).length;
+    var meta=r.meta+(used?' · used by '+used+(used===1?' bell':' bells'):'');
+    var del='';
+    if(!r.builtin){
+      var asking=pendingDel===r.id;
+      del='<button type="button" class="btn'+(asking?' danger':'')+'" data-act="del" aria-label="Remove '+esc(r.name)+'">'+(asking?'Click again to remove':'Remove')+'</button>';
+    }
+    return '<li class="lib" data-sid="'+esc(r.id)+'"><div class="nm"><span>'+esc(r.name)+'</span><small>'+esc(meta)+'</small></div>'+
+      '<button type="button" class="icon" data-act="play" aria-label="Preview '+esc(r.name)+'">'+ICON_PLAY+'</button>'+del+'</li>';
+  }).join('');
+}
+function renderDays(){
+  $('days').innerHTML=DAYS.map(function(d){
+    return '<button type="button" class="day" data-day="'+d[0]+'" aria-pressed="'+(settings.days.indexOf(d[0])>=0)+'">'+d[1]+'</button>';
+  }).join('');
+}
+function renderAll(){
+  fillSoundSelects();
+  renderBells();
+  renderLibrary();
+}
+
+/* ---------- Setup form ---------- */
+function clamp(v,lo,hi,def){
+  v=parseInt(v,10);
+  if(isNaN(v)) return def;
+  return Math.min(hi,Math.max(lo,v));
+}
+function fillLongAfter(){
+  var sel=$('longAfter'), h='<option value="0">None</option>';
+  for(var i=1;i<settings.periods;i++) h+='<option value="'+i+'">After period '+i+'</option>';
+  sel.innerHTML=h;
+  sel.value=String(settings.longAfter>0&&settings.longAfter<settings.periods?settings.longAfter:0);
+  $('longMin').disabled=sel.value==='0';
+}
+function fillForm(){
+  $('startTime').value=settings.start;
+  $('periodMin').value=settings.periodMin;
+  $('gapMin').value=settings.gapMin;
+  $('periods').value=settings.periods;
+  $('longMin').value=settings.longMin;
+  $('ringEnd').checked=settings.ringEnd;
+  $('ringSec').value=settings.ringSec;
+  $('volume').value=Math.round(settings.volume*100);
+  $('volVal').textContent=Math.round(settings.volume*100)+'%';
+  $('manualLimit').checked=settings.manualLimit;
+  $('manualLimitText').textContent='Stop automatically after '+settings.ringSec+' seconds';
+  fillLongAfter();
+  renderDays();
+  updateSummary();
+}
+function readForm(){
+  var s=settings, st=$('startTime').value;
+  if(toMin(st)!==null) s.start=st;
+  s.periodMin=clamp($('periodMin').value,1,240,s.periodMin);
+  s.gapMin=clamp($('gapMin').value,0,120,s.gapMin);
+  s.periods=clamp($('periods').value,1,20,s.periods);
+  s.longAfter=clamp($('longAfter').value,0,s.periods-1,0);
+  s.longMin=clamp($('longMin').value,1,120,s.longMin);
+  s.ringEnd=$('ringEnd').checked;
+  s.defaultSound=$('defaultSound').value||s.defaultSound;
+  s.ringSec=clamp($('ringSec').value,1,120,s.ringSec);
+  s.manualLimit=$('manualLimit').checked;
+}
+function updateSummary(){
+  var list=buildBells(settings);
+  var el=$('summary');
+  if(!list.length){el.textContent='Choose a start time to see the day.';return;}
+  var txt=settings.periods+' periods of '+settings.periodMin+' min, '+settings.gapMin+' min apart';
+  if(settings.longAfter>0) txt+=', then a '+settings.longMin+' min break after period '+settings.longAfter;
+  txt+='. The day runs '+fmtStr(list[0].time)+' to '+fmtStr(list[list.length-1].time)+' with '+list.length+' bells.';
+  el.textContent=txt;
+}
+
+/* ---------- Events ---------- */
+$('armBtn').addEventListener('click',function(){armed?disarm():arm();});
+document.addEventListener('click',function(e){
+  if(e.target.closest&&e.target.closest('.js-stop')) stopAll();
+});
+document.addEventListener('keydown',function(e){if(e.key==='Escape') stopAll();});
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible') requestWake();});
+window.addEventListener('beforeunload',function(e){if(armed){e.preventDefault();e.returnValue='';}});
+
+$('setupForm').addEventListener('input',function(e){
+  readForm();
+  if(e.target.id==='periods') fillLongAfter();
+  if(e.target.id==='longAfter') $('longMin').disabled=$('longAfter').value==='0';
+  $('manualLimitText').textContent='Stop automatically after '+settings.ringSec+' seconds';
+  updateSummary();
+  persist();
+});
+$('setupForm').addEventListener('change',function(){
+  readForm();
+  fillForm();
+  persist();
+});
+$('setupForm').addEventListener('submit',function(e){
+  e.preventDefault();
+  readForm();
+  fillForm();
+  bells=makeBells(bells);
+  sortBells();
+  markPastFired();
+  persist();
+  renderAll();
+  say('Bell list rebuilt: '+bells.length+' bells.');
+});
+$('days').addEventListener('click',function(e){
+  var b=e.target.closest('.day');
+  if(!b) return;
+  var d=+b.dataset.day, i=settings.days.indexOf(d);
+  if(i>=0) settings.days.splice(i,1); else settings.days.push(d);
+  renderDays();
+  persist();
+  lastClock='';
+  renderBoard(new Date());
+});
+$('volume').addEventListener('input',function(){
+  settings.volume=clamp($('volume').value,0,100,80)/100;
+  $('volVal').textContent=Math.round(settings.volume*100)+'%';
+  if(master) master.gain.value=settings.volume;
+  if(current&&current.kind==='file'&&!current.fade) current.audio.volume=settings.volume;
+  persist();
+});
+
+$('bellList').addEventListener('change',function(e){
+  var row=e.target.closest('.row');
+  if(!row) return;
+  var b=bells.find(function(x){return x.id===row.dataset.id;});
+  if(!b) return;
+  var f=e.target.dataset.f;
+  if(f==='time'){
+    if(toMin(e.target.value)===null){e.target.value=b.time;return;}
+    b.time=e.target.value;
+    sortBells();
+    markPastFired();
+    persist();
+    renderAll();
+    lastClock='';
+  }else if(f==='label'){
+    b.label=e.target.value.trim()||'Bell';
+    persist();
+  }else if(f==='sound'){
+    b.sound=e.target.value;
+    persist();
+    renderLibrary();
+  }else if(f==='on'){
+    b.on=e.target.checked;
+    persist();
+    markRows();
+    lastClock='';
+  }
+});
+$('bellList').addEventListener('click',function(e){
+  var btn=e.target.closest('[data-act]');
+  if(!btn) return;
+  var row=btn.closest('.row');
+  var b=bells.find(function(x){return x.id===row.dataset.id;});
+  if(!b) return;
+  if(btn.dataset.act==='play') play(b.sound,{limit:settings.ringSec});
+  else if(btn.dataset.act==='del'){
+    bells=bells.filter(function(x){return x.id!==b.id;});
+    persist();
+    renderAll();
+    lastClock='';
+  }
+});
+$('allApply').addEventListener('click',function(){
+  var v=$('allSound').value;
+  bells.forEach(function(b){b.sound=v;});
+  persist();
+  renderAll();
+  $('allSound').value=v;
+  say('Every bell now uses '+soundName(v)+'.');
+});
+$('addBell').addEventListener('click',function(){
+  var lastT=bells.length?toMin(bells[bells.length-1].time):toMin(settings.start);
+  var nb={id:uid(),time:toStr(Math.min(1439,lastT+5)),label:'Extra bell',sound:settings.defaultSound,on:true};
+  bells.push(nb);
+  sortBells();
+  markPastFired();
+  persist();
+  renderAll();
+  lastClock='';
+  var t=document.querySelector('#bellList [data-id="'+nb.id+'"] .f-time');
+  if(t){t.focus();if(t.scrollIntoView) t.scrollIntoView({block:'center'});}
+});
+
+$('manualSound').addEventListener('change',function(){settings.manualSound=$('manualSound').value;persist();});
+$('manualLimit').addEventListener('change',function(){settings.manualLimit=$('manualLimit').checked;persist();});
+$('manualPlay').addEventListener('click',function(){
+  settings.manualSound=$('manualSound').value;
+  settings.manualLimit=$('manualLimit').checked;
+  persist();
+  play(settings.manualSound,{limit:settings.manualLimit?settings.ringSec:0});
+});
+
+/* Library */
+function removeUpload(id){
+  var sid='u:'+id;
+  var u=uploads.find(function(x){return x.id===id;});
+  uploads=uploads.filter(function(x){return x.id!==id;});
+  if(u) try{URL.revokeObjectURL(u.url);}catch(e){}
+  idbDel(id).catch(function(){});
+  var fallback=settings.defaultSound===sid?'b:classic':settings.defaultSound;
+  bells.forEach(function(b){if(b.sound===sid) b.sound=fallback;});
+  if(settings.defaultSound===sid) settings.defaultSound='b:classic';
+  if(settings.manualSound===sid) settings.manualSound='b:classic';
+  persist();
+  renderAll();
+}
+$('libList').addEventListener('click',function(e){
+  var btn=e.target.closest('[data-act]');
+  if(!btn) return;
+  var sid=btn.closest('.lib').dataset.sid;
+  if(btn.dataset.act==='play'){play(sid,{limit:6});return;}
+  if(pendingDel===sid){
+    pendingDel=null;
+    removeUpload(sid.slice(2));
+    say('Sound removed. Bells that used it now use '+soundName(settings.defaultSound)+'.');
+  }else{
+    pendingDel=sid;
+    renderLibrary();
+    setTimeout(function(){if(pendingDel===sid){pendingDel=null;renderLibrary();}},4000);
+  }
+});
+function addFiles(fileList){
+  var files=Array.prototype.slice.call(fileList||[]);
+  var added=0, problems=[], unsaved=false;
+  var chain=Promise.resolve();
+  files.forEach(function(f){
+    chain=chain.then(function(){
+      var isAudio=f.type.indexOf('audio/')===0||/\.(mp3|wav|ogg|m4a|aac|flac|opus|webm)$/i.test(f.name);
+      if(!isAudio){problems.push(f.name+' is not an audio file.');return;}
+      if(f.size>40*1024*1024){problems.push(f.name+' is larger than 40 MB.');return;}
+      var rec={id:uid(),name:f.name.replace(/\.[^.]+$/,''),size:f.size,type:f.type||'audio/mpeg',blob:f};
+      return idbPut(rec).catch(function(){unsaved=true;}).then(function(){
+        uploads.push({id:rec.id,name:rec.name,size:rec.size,url:URL.createObjectURL(f)});
+        added++;
+      });
+    });
+  });
+  chain.then(function(){
+    renderAll();
+    var parts=[];
+    if(added) parts.push('Added '+added+(added===1?' sound.':' sounds.'));
+    if(unsaved) parts.push('This browser would not store the files, so they last until the page is closed.');
+    if(problems.length) parts.push(problems.join(' '));
+    if(parts.length) say(parts.join(' '));
+  });
+}
+$('fileInput').addEventListener('change',function(e){addFiles(e.target.files);e.target.value='';});
+var drop=$('libraryCard');
+drop.addEventListener('dragover',function(e){e.preventDefault();$('drop').classList.add('over');});
+drop.addEventListener('dragleave',function(e){if(!drop.contains(e.relatedTarget)) $('drop').classList.remove('over');});
+drop.addEventListener('drop',function(e){
+  e.preventDefault();
+  $('drop').classList.remove('over');
+  if(e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+});
+
+/* ---------- Ticker ---------- */
+function tick(){
+  var now=new Date();
+  renderBoard(now);
+  if(armed) checkBells(now);
+  updatePlayback();
+}
+function startTicker(){
+  try{
+    var url=URL.createObjectURL(new Blob(['setInterval(function(){postMessage(1)},250)'],{type:'text/javascript'}));
+    var w=new Worker(url);
+    w.onmessage=tick;
+    w.onerror=function(){setInterval(tick,250);};
+  }catch(e){
+    setInterval(tick,250);
+  }
+}
+
+/* Tabs */
+function showTab(name){
+  ['play','times','music'].forEach(function(n){
+    $('panel-'+n).hidden=n!==name;
+    $('tab-'+n).setAttribute('aria-selected',n===name?'true':'false');
+  });
+  try{sessionStorage.setItem('smartbell.tab',name);}catch(e){}
+}
+document.querySelector('.tabs').addEventListener('click',function(e){
+  var t=e.target.closest('.tab'); if(t) showTab(t.dataset.tab);
+});
+
+/* ---------- Start ---------- */
+load();
+fillForm();
+renderAll();
+renderArm();
+renderPlaying();
+tick();
+startTicker();
+try{var st=sessionStorage.getItem('smartbell.tab'); if(st) showTab(st);}catch(e){}
+idbAll().then(function(recs){
+  uploads=recs.map(function(r){return {id:r.id,name:r.name,size:r.size,url:URL.createObjectURL(r.blob)};});
+  renderAll();
+}).catch(function(){});
+})();
+</script>
+
+</body></html>
